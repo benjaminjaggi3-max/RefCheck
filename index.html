@@ -282,14 +282,13 @@ const cloudCtx = cloudCanvas.getContext("2d");
 const orbitToggle = element("orbitToggle");
 
 let orbitEnabled = false;
-let orbitAngleY = 0;
-let orbitAngleX = -0.8;
+let orbitAngleZ = 0;
+const viewAngleX = -0.8;
 let currentPoints = [];
 let isDragging = false;
 let dragStartX = 0;
 let dragStartY = 0;
-let dragAngleY = 0;
-let dragAngleX = -0.8;
+let dragAngleZ = 0;
 let zoomLevel = 1;
 
 function drawEmptyCloud() {
@@ -318,24 +317,26 @@ function drawEmptyCloud() {
   cloudCtx.fillText("Punktwolke wartet auf Datei…", 24, 26);
 }
 
-function project3DPoint([x, y, z], angleY, angleX, width, height, center, scale) {
+function project3DPoint([x, y, z], angleZ, width, height, center, scale) {
   const dx = x - center.x;
   const dy = y - center.y;
   const dz = z - center.z;
 
-  const cosY = Math.cos(angleY);
-  const sinY = Math.sin(angleY);
-  const cosX = Math.cos(angleX);
-  const sinX = Math.sin(angleX);
+  const cosZ = Math.cos(angleZ);
+  const sinZ = Math.sin(angleZ);
+  const cosX = Math.cos(viewAngleX);
+  const sinX = Math.sin(viewAngleX);
 
-  const x1 = dx * cosY + dz * sinY;
-  const z1 = -dx * sinY + dz * cosY;
-  const y1 = dy * cosX - z1 * sinX;
-  const z2 = dy * sinX + z1 * cosX;
+  // Rotate only in the horizontal plane; Z values and the slope stay unchanged.
+  const x1 = dx * cosZ - dy * sinZ;
+  const y1 = dx * sinZ + dy * cosZ;
+  const z1 = dz;
+  const projectedY = y1 * cosX - z1 * sinX;
+  const z2 = y1 * sinX + z1 * cosX;
 
   const perspective = 1 + (z2 / 500);
   const px = width / 2 + x1 * scale * zoomLevel * perspective;
-  const py = height / 2 - y1 * scale * zoomLevel * perspective;
+  const py = height / 2 - projectedY * scale * zoomLevel * perspective;
 
   return { px, py, depth: z2 };
 }
@@ -442,7 +443,7 @@ function render3DPointCloud(points) {
   cloudCtx.fillRect(0, 0, width, height);
 
   const projected = sample.map(point =>
-    project3DPoint(point, orbitAngleY, orbitAngleX, width, height, center, scale)
+    project3DPoint(point, orbitAngleZ, width, height, center, scale)
   );
 
   const sorted = projected
@@ -480,7 +481,7 @@ function renderPointCloud(points) {
 function animateOrbit() {
   if (!orbitEnabled || !currentPoints.length || isDragging) return;
 
-  orbitAngleY += 0.006;
+  orbitAngleZ += 0.006;
   renderPointCloud(currentPoints);
   requestAnimationFrame(animateOrbit);
 }
@@ -491,8 +492,7 @@ cloudCanvas.addEventListener("pointerdown", event => {
   isDragging = true;
   dragStartX = event.clientX;
   dragStartY = event.clientY;
-  dragAngleY = orbitAngleY;
-  dragAngleX = orbitAngleX;
+  dragAngleZ = orbitAngleZ;
   cloudCanvas.setPointerCapture(event.pointerId);
 });
 
@@ -500,10 +500,7 @@ cloudCanvas.addEventListener("pointermove", event => {
   if (!orbitEnabled || !isDragging) return;
 
   const dx = event.clientX - dragStartX;
-  const dy = event.clientY - dragStartY;
-
-  orbitAngleY = dragAngleY + dx * 0.0035;
-  orbitAngleX = Math.max(-1.5, Math.min(1.5, dragAngleX + dy * 0.003));
+  orbitAngleZ = dragAngleZ + dx * 0.0035;
   renderPointCloud(currentPoints);
 });
 
